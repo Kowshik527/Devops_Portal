@@ -2,6 +2,8 @@ import express from 'express';
 import mongoose from 'mongoose';
 import bodyParser from 'body-parser';
 import cors from 'cors';
+import basicAuth from 'express-basic-auth';
+import dotenv from 'dotenv'
 import { Client } from 'ssh2';
 import fs from 'fs';
 import axios from 'axios';
@@ -11,9 +13,10 @@ const app = express();
 const PORT = 8001;
 app.use(cors());
 app.use(bodyParser.json());
+dotenv.config()
+
 
 // const sshconn = new Client();
-
 
 
 import organizationroute from './Routes/AutoInfra/Organizations/Organizations.js'
@@ -56,9 +59,18 @@ mongoose.connect(connectionString, {
 //   privateKey: fs.readFileSync('devopsadm.pem', { encoding: "utf8" })
 //   // password: 'Cm7D5@vN*Z1eq'
 // });
+/*
+const users = {
+  [process.env.API_USERNAME]: process.env.API_PASSWORD,
+};
 
-
-
+// Use basicAuth middleware
+app.use(basicAuth({
+  users,
+  challenge: true, // Send 401 when unauthorized
+  unauthorizedResponse: 'Unauthorized'
+}));
+*/
 
 
 app.use('/api/users', usersroute)
@@ -142,8 +154,6 @@ app.use('/api/dashboard-autoinfra', projectroute)
 //   return output;
 // }
 
-
-
 app.post('/api/teamsMessage', async (req, res) => {
 
   console.log("----------------------------------")
@@ -163,9 +173,7 @@ app.post('/api/teamsMessage', async (req, res) => {
    }
 
 })
-
-
-
+ 
 app.post('/api/email', async (req, res) => {
   
   console.log("----------------------------------")

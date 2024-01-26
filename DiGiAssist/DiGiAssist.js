@@ -1,12 +1,16 @@
 import { ansibleExec } from './ansibleExecution.js';
 import { streamLineTask, getCommand } from './extractData.js';
 import getApproval from './GetApproval.js';
-import { getRPA } from './rpaExecution.js';
+import { uploadToAzureBlobStorage } from './cloudExcel.js';
+import { writeToExcel } from './cloudExcel.js';
 import { jobid } from './extractData.js';
-import { getCheck } from './rpaExecution.js';
-import { getSend } from './rpaExecution.js';
+import { rpaExecution } from './rpaExecution.js';
+import { openiAPI } from './openai.js';
 
-const DiGiAssist = async(req) => {
+// import writeToExcel from './newTask.js';
+
+
+const DiGiAssist = async (req, res) => {
 
     try {
 
@@ -32,13 +36,29 @@ const DiGiAssist = async(req) => {
         // const { server_names: serverNames, problem, ports } = response.data;
 
         // const dataarray = [problem[0], serverNames[0], ports[0]]
+        const prompt = "Hi team, check wether the kaartech website is up or down."
+        const jsonString = await openiAPI(prompt);
+        const jsonData = JSON.parse(jsonString);
+        let dataarray = [
+            jsonData.Problem,
+            jsonData.Server,
+            jsonData.Parameter
+        ];
+        if(['add user', 'os add user', 'os user add'].includes(dataarray[0]) && dataarray[2].includes(',')){
+            let parameterValues = jsonData.Parameter.split(',');
+            dataarray.splice(2, 1); 
+            dataarray = dataarray.concat(parameterValues);
+        }
+        console.log(dataarray);
 
-        // const dataarray = ["users list", "Management-VM", "3394"]
+        // const dataarray = ["ssl certification expiration ", "null", "kaartech website"]
 
-        const dataarray = ["disk info", "Management-VM", "N/A"]
-
+        // const dataarray = ["replication", "N/A", "N/A"]
+        // await getApproval("Hello");
 
         let result = "";
+        let output = "";
+        let Successoutput = "";
         let streamLineResult = await streamLineTask(dataarray);
 
         console.log(streamLineResult)
@@ -56,32 +76,54 @@ const DiGiAssist = async(req) => {
             result = "Approve"
         } else if (streamLineResult[2] === "new task") {
             result = "new task";
-            console.log('Its a new task, need to store the data for later purpose.Also need to send reply mail by stating it to the customer')
-        }
+            // await getApproval(output)
+            const staticString = "This is third line to be inserted";
 
-        let output = ""
+            try {
+                const filePath = 'new-tasks-collection.xlsx';
+                await writeToExcel(staticString, filePath);
+                console.log('Email stored and Excel file uploaded to Azure Blob Storage');
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+        // Successoutput=false
+        // console.log(output)
 
         if (result === "Approve") {
             let command;
             if (streamLineResult[1] === "RPA") {
                 let job = await jobid(dataarray)
                 console.log(job)
-                const output1 =  await getRPA(job);
-                console.log(output1)
-                
-                console.log("---before----")
-                let rs1=await getCheck(output1)
-                console.log(`${rs1} output in digissist`)
-                console.log("---after----")
+                const data = await rpaExecution(job);
+                console.log("DigiAssist Output:\n", data)
+
+                const key = Object.keys(data)[0];
+                const keyValues = data[key];
+
+                if (!keyValues || !Array.isArray(keyValues) || keyValues.length === 0) {
+                    return '';
+                }
+
+                const properties = Object.keys(keyValues[0]);
+                const valuesArray = keyValues.map(item => properties.map(prop => item[prop]).join(', '));
+                output = valuesArray.join('\n');
+
+                // await getApproval(output);
             }
             else if (streamLineResult[1] === "Ansible") {
 
                 command = await getCommand(dataarray);
                 console.log(command)
-                let output_ans = await ansibleExec(command);
-                console.log(`digi output \n ${output_ans}`)
-                let a=await getApproval(output_ans)
-                console.log(a)
+                let { successOut, arrayOut } = await ansibleExec(command);
+                if (arrayOut.length == 1)
+                    output = arrayOut.map(item => item.trim()).join('');
+                else
+                    output = arrayOut.map(item => item.replace(/\s+$/, '\n')).join('');
+                console.log(output);
+
+                // console.log(`digi output \n ${output}`)
+                await getApproval(output)
 
             }
             console.log("----------------------------------");
@@ -96,11 +138,9 @@ const DiGiAssist = async(req) => {
             console.log("--------------------------")
 
         }
-
         else {
             output = "It's a new task, DigiAssistant need to be trained."
         }
-
 
         const endTime = performance.now();
 
@@ -119,7 +159,6 @@ const DiGiAssist = async(req) => {
 
         const performedTime = `Time taken to complete the task: ${timeTakenInMinutes} minutes and ${roundedSeconds} seconds.`
 
-
         const data = {
             // "subject": requestData.subject,
             // "body": response.data,
@@ -127,7 +166,6 @@ const DiGiAssist = async(req) => {
             "output": output,
             "performedTime": performedTime,
         }
-
         return data;
     } catch (error) {
         console.error('Error handling POST request:', error);
