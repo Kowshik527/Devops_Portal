@@ -1,7 +1,9 @@
 import { OpenAI } from "openai";
+import dotenv from 'dotenv'
+dotenv.config()
 
 const openai = new OpenAI({
-  apiKey: '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', // This is the default and can be omitted
+  apiKey: process.env.OPENAI_API, // This is the default and can be omitted
 });
 
 export const openiAPI = async (prompt) => {
